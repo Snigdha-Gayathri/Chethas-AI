@@ -28,9 +28,10 @@ export default function Home() {
     setError(null);
     try {
       const createdGoal = await api.createGoal({
-        description: goal,
-        domain: "General Investigation",
-        priority: "high"
+        user_input: goal,
+        domain_hint: "General Investigation",
+        constraints: {},
+        document_ids: []
       });
       const execution = await api.startExecution(createdGoal.id);
       router.push(`/execution/${execution.id}`);

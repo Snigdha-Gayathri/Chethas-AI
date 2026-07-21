@@ -1,17 +1,20 @@
 // Types mirroring the backend Pydantic models
 
 export interface GoalCreate {
-  query: string;
-  context?: string;
+  user_input: string;
+  domain_hint?: string;
+  constraints?: Record<string, any>;
+  document_ids?: string[];
 }
 
 export interface Goal {
   id: string;
-  query: string;
-  context?: string;
+  user_input: string;
+  domain_hint?: string;
+  constraints?: Record<string, any>;
+  document_ids: string[];
   status: string;
   created_at: string;
-  updated_at: string;
 }
 
 export interface TimelineEvent {
