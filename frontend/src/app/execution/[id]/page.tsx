@@ -16,6 +16,9 @@ import { MetricsPanel } from "@/components/transparency/MetricsPanel";
 import { ContextStrategyBadge } from "@/components/execution/ContextStrategyBadge";
 import { cn } from "@/lib/utils";
 import { Loader2, AlertCircle } from "lucide-react";
+import { api } from "@/lib/api";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 // The actual page content wrapped in the provider context
 function ExecutionDashboard({ id }: { id: string }) {
@@ -29,21 +32,18 @@ function ExecutionDashboard({ id }: { id: string }) {
 
     async function loadAndSubscribe() {
       try {
-        fromApiInit: {
-          const res = await fetch(`http://localhost:8000/api/executions/${id}`);
-          if (!res.ok) {
-            throw new Error(`Failed to load execution details (${res.status})`);
-          }
-          const execData = await res.json();
-          if (isMounted) {
-            dispatch({ type: "SET_EXECUTION", payload: execData });
-            dispatch({ type: "SET_ACTIVE_PHASE", payload: "p1" });
-            setLoading(false);
-          }
+        const res = await fetch(`${API_BASE}/api/executions/${id}`);
+        if (!res.ok) {
+          throw new Error(`Failed to load execution details (${res.status})`);
         }
+        const execData = await res.json();
+        if (!isMounted) return;
+        dispatch({ type: "SET_EXECUTION", payload: execData });
+        dispatch({ type: "SET_ACTIVE_PHASE", payload: "p1" });
+        setLoading(false);
 
         // Connect to SSE for real-time agent updates
-        sse = new EventSource(`http://localhost:8000/api/executions/${id}/stream`);
+        sse = new EventSource(`${API_BASE}/api/executions/${id}/stream`);
         sse.addEventListener("update", (event: any) => {
           if (!isMounted) return;
           try {
@@ -247,10 +247,11 @@ function ExecutionDashboard({ id }: { id: string }) {
 }
 
 // Next.js page component
-export default function Page({ params }: { params: { id: string } }) {
+export default function Page({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = React.use(params);
   return (
     <ExecutionProvider>
-      <ExecutionDashboard id={params.id} />
+      <ExecutionDashboard id={id} />
     </ExecutionProvider>
   );
 }
