@@ -4,7 +4,7 @@ import uuid
 import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, status, BackgroundTasks
-from app.models.execution import Execution, ExecutionCreate, ExecutionSummary
+from app.models.execution import Execution, ExecutionCreate, ExecutionSummary, ExecutionPhase
 from app.api.routes.goals import GOALS_DB
 from app.api.routes.stream import broadcast_event
 
@@ -24,7 +24,7 @@ async def run_execution_workflow(goal_id: str, execution_id: str):
         return
         
     goal_obj = GOALS_DB.get(goal_id)
-    goal_text = goal_obj.description if goal_obj else "General investigation task"
+    goal_text = goal_obj.user_input if goal_obj else "General investigation task"
     
     execution.status = "running"
     execution.updated_at = datetime.now(timezone.utc)
@@ -77,29 +77,34 @@ async def run_execution_workflow(goal_id: str, execution_id: str):
 @router.post("", response_model=Execution, status_code=status.HTTP_201_CREATED)
 async def create_execution(execution_in: ExecutionCreate, background_tasks: BackgroundTasks) -> Execution:
     """Start a new execution for a goal."""
+    goal_obj = GOALS_DB.get(execution_in.goal_id)
+    if not goal_obj:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Goal with id {execution_in.goal_id} not found."
+        )
+
     exec_id = str(uuid.uuid4())
-    exec_dict = execution_in.model_dump() if hasattr(execution_in, "model_dump") else execution_in.dict()
-    exec_dict["id"] = exec_id
-    exec_dict["status"] = "pending"
-    
-    # Initialize phase structure
-    exec_dict["phases"] = [
-        {"id": "p1", "name": "Planning", "status": "pending", "logs": []},
-        {"id": "p2", "name": "Task Decomposition", "status": "pending", "logs": []},
-        {"id": "p3", "name": "Role Generation", "status": "pending", "logs": []},
-        {"id": "p4", "name": "Expert Analysis", "status": "pending", "logs": []},
-        {"id": "p5", "name": "Deliberation", "status": "pending", "logs": []},
-        {"id": "p6", "name": "Reflection", "status": "pending", "logs": []},
-        {"id": "p7", "name": "Judgment", "status": "pending", "logs": []},
-        {"id": "p8", "name": "Consensus", "status": "pending", "logs": []},
-    ]
-    
-    execution = Execution(**exec_dict)
+    execution = Execution(
+        id=exec_id,
+        goal=goal_obj,
+        status="pending",
+        phases=[
+            ExecutionPhase(name="Planning"),
+            ExecutionPhase(name="Task Decomposition"),
+            ExecutionPhase(name="Role Generation"),
+            ExecutionPhase(name="Expert Analysis"),
+            ExecutionPhase(name="Deliberation"),
+            ExecutionPhase(name="Reflection"),
+            ExecutionPhase(name="Judgment"),
+            ExecutionPhase(name="Consensus"),
+        ],
+    )
     EXECUTIONS_DB[exec_id] = execution
-    
+
     # Trigger background execution workflow
-    background_tasks.add_task(run_execution_workflow, execution.goal_id, exec_id)
-    
+    background_tasks.add_task(run_execution_workflow, execution_in.goal_id, exec_id)
+
     return execution
 
 @router.get("", response_model=List[ExecutionSummary])
@@ -107,8 +112,13 @@ async def list_executions() -> List[ExecutionSummary]:
     """List all executions."""
     summaries = []
     for exec_obj in EXECUTIONS_DB.values():
-        exec_dict = exec_obj.model_dump() if hasattr(exec_obj, "model_dump") else exec_obj.dict()
-        summaries.append(ExecutionSummary(**exec_dict))
+        summaries.append(ExecutionSummary(
+            id=exec_obj.id,
+            goal_id=exec_obj.goal.id,
+            status=exec_obj.status,
+            created_at=exec_obj.created_at,
+            completed_at=exec_obj.completed_at,
+        ))
     return summaries
 
 @router.get("/{execution_id}", response_model=Execution)
@@ -131,11 +141,7 @@ async def cancel_execution(execution_id: str) -> Execution:
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Execution with id {execution_id} not found."
         )
-    
-    exec_dict = execution.model_dump() if hasattr(execution, "model_dump") else execution.dict()
-    exec_dict["status"] = "cancelled"
-    
-    updated_execution = Execution(**exec_dict)
-    EXECUTIONS_DB[execution_id] = updated_execution
-    return updated_execution
+    execution.status = "cancelled"
+    execution.updated_at = datetime.now(timezone.utc)
+    return execution
 

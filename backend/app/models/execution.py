@@ -53,4 +53,5 @@ class Execution(BaseModel):
     confidence_score: float = 0.0
     max_iterations: int = 3
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     completed_at: Optional[datetime] = None
