@@ -21,6 +21,8 @@ def get_llm(
             google_api_key=settings.google_api_key,
             temperature=temperature,
             max_output_tokens=max_tokens,
+            max_retries=1,
+            timeout=25.0,
         )
     elif provider == "openai":
         from langchain_openai import ChatOpenAI
@@ -29,6 +31,8 @@ def get_llm(
             api_key=settings.openai_api_key,
             temperature=temperature,
             max_tokens=max_tokens,
+            max_retries=1,
+            timeout=25.0,
         )
     else:
         raise ValueError(f"Unsupported LLM provider: {provider}")

@@ -3,13 +3,28 @@ import {
   DocumentMetadata, StreamEvent, EvaluationResult
 } from './types';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+export function getApiBaseUrl(): string {
+  if (typeof window !== 'undefined') {
+    const envUrl = process.env.NEXT_PUBLIC_API_URL;
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    
+    if (envUrl && envUrl.trim() !== '') {
+      if (!isLocalhost && envUrl.includes('localhost')) {
+        return window.location.origin;
+      }
+      return envUrl.replace(/\/$/, '');
+    }
+    
+    if (!isLocalhost) {
+      return window.location.origin;
+    }
+  }
+  return (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/$/, '');
+}
 
 class ChethasAPI {
-  private baseUrl: string;
-  
-  constructor(baseUrl: string = API_BASE) {
-    this.baseUrl = baseUrl;
+  private get baseUrl(): string {
+    return getApiBaseUrl();
   }
   
   private async request<T>(path: string, options?: RequestInit): Promise<T> {

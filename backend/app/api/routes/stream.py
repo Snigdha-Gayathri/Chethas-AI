@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Dict, List
 from fastapi import APIRouter
 from sse_starlette.sse import EventSourceResponse
+from app.storage import persistent_store
 
 router = APIRouter(prefix="/api/executions", tags=["Streaming"])
 
@@ -25,6 +26,7 @@ async def broadcast_event(execution_id: str, event_type: str, phase: str, agent_
     if execution_id not in EVENT_HISTORY:
         EVENT_HISTORY[execution_id] = []
     EVENT_HISTORY[execution_id].append(event_data)
+    persistent_store.save_event(execution_id, event_data)
     
     if execution_id in STREAM_QUEUES:
         await STREAM_QUEUES[execution_id].put(event_data)
@@ -35,7 +37,14 @@ async def real_event_generator(execution_id: str):
         STREAM_QUEUES[execution_id] = asyncio.Queue()
         
     # First replay past events if any occurred before connecting
-    history = EVENT_HISTORY.get(execution_id, [])
+    history = EVENT_HISTORY.get(execution_id)
+    if not history:
+        history = persistent_store.get_event_history(execution_id)
+        if history:
+            EVENT_HISTORY[execution_id] = history
+    if not history:
+        history = []
+        
     for ev in history:
         yield {
             "event": "update",
@@ -64,4 +73,5 @@ async def real_event_generator(execution_id: str):
 async def stream_execution_updates(execution_id: str) -> EventSourceResponse:
     """Server-Sent Events endpoint that streams live workflow execution updates in real-time."""
     return EventSourceResponse(real_event_generator(execution_id))
+
 

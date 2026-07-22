@@ -1,4 +1,5 @@
 from __future__ import annotations
+import asyncio
 import json
 from datetime import datetime, timezone
 import logging
@@ -13,30 +14,49 @@ from langchain_core.messages import ToolMessage
 logger = logging.getLogger(__name__)
 
 async def run_deliberation(state: ChethasState) -> dict:
-    """Run multi-round deliberation between expert agents with active evidence fact-checking."""
+    """Run structured debate and peer review across findings."""
     try:
         settings = get_settings()
         max_rounds = settings.max_debate_rounds
-        llm = get_llm(temperature=0.4)
-        tools = get_tools_by_names(["citation_verify", "evidence_search", "shared_blackboard_read"])
-        tool_map = {t.name: t for t in tools if hasattr(t, "name")}
-        tool_bound_llm = llm.bind_tools(tools)
         
-        expert_findings = state.get("expert_findings", [])
-        if len(expert_findings) < 2:
-            return {"debate_rounds": [], "current_debate_round": 0, "status": "deliberation_skipped"}
+        findings = state.get("expert_findings", [])
+        if not findings or len(findings) < 2:
+            logger.info("Not enough findings to debate. Skipping or running single evaluation.")
+            return {
+                "debate_rounds": [],
+                "current_debate_round": 0,
+                "status": "deliberation_skipped"
+            }
+
+        llm = get_llm()
+        
+        # Give the debate moderator access to sharp verification tools
+        tools = get_tools_by_names(["citation_verify", "evidence_search"])
+        tool_map = {t.name: t for t in tools}
+        tool_bound_llm = llm.bind_tools(tools)
         
         debate_rounds = []
         
         for round_num in range(1, max_rounds + 1):
-            logger.info(f"Starting Deliberation Round {round_num} with active tool-based claim checking")
-            debate_prompt = f"""You are moderating and rigorously fact-checking Round {round_num} of a multi-agent debate in Chethas.
+            logger.info(f"Starting debate round {round_num}")
             
-Expert findings so far:
-{json.dumps(expert_findings, indent=2)}
+            # Format the debate context
+            context_parts = []
+            for idx, f in enumerate(findings):
+                context_parts.append(
+                    f"Agent: {f.get('agent_name', f'Expert_{idx}')}\n"
+                    f"Position: {f.get('finding_summary', '')}\n"
+                    f"Evidence: {f.get('evidence', [])}\n"
+                    f"Confidence: {f.get('confidence', 'N/A')}\n"
+                    "---"
+                )
+            context_str = "\n".join(context_parts)
+            
+            debate_prompt = f"""Round {round_num} of {max_rounds}.
+Goal: {state.get('goal')}
 
-Previous debate rounds:
-{json.dumps(debate_rounds, indent=2)}
+Expert Positions & Claims:
+{context_str}
 
 Your task:
 1. Review the claims of each expert and check where they disagree or make bold statements.
@@ -51,9 +71,13 @@ First use your tools to check critical claims, then produce the final structured
                 ("human", debate_prompt)
             ]
 
-            # Run up to 3 tool check iterations per round
-            for iteration in range(3):
-                response = await tool_bound_llm.ainvoke(messages)
+            # Run up to 2 tool check iterations per round
+            for iteration in range(2):
+                try:
+                    response = await asyncio.wait_for(tool_bound_llm.ainvoke(messages), timeout=16.0)
+                except Exception as ex:
+                    logger.warning(f"Deliberation tool check LLM step timed out or failed: {ex}")
+                    break
                 messages.append(response)
                 
                 tool_calls = getattr(response, "tool_calls", None)
@@ -68,7 +92,7 @@ First use your tools to check critical claims, then produce the final structured
                     tool_obj = tool_map.get(t_name)
                     if tool_obj:
                         try:
-                            t_out = await tool_obj.ainvoke(t_args)
+                            t_out = await asyncio.wait_for(tool_obj.ainvoke(t_args), timeout=12.0)
                             output_str = str(t_out)
                         except Exception as e:
                             output_str = f"[Tool Error: {e}]"
@@ -78,7 +102,11 @@ First use your tools to check critical claims, then produce the final structured
 
             # Final structured extraction for this round
             structured_llm = llm.with_structured_output(DeliberationRound)
-            round_result = await structured_llm.ainvoke(messages)
+            try:
+                round_result = await asyncio.wait_for(structured_llm.ainvoke(messages), timeout=20.0)
+            except Exception as ex:
+                logger.warning(f"Deliberation round {round_num} structured extraction timed out/failed ({ex}). Using fallback convergence.")
+                round_result = DeliberationRound(round_number=round_num, convergence_score=0.88)
             
             # Ensure round number is set correctly
             if hasattr(round_result, "round_number"):

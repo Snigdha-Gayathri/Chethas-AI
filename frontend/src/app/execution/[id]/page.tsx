@@ -16,9 +16,7 @@ import { MetricsPanel } from "@/components/transparency/MetricsPanel";
 import { ContextStrategyBadge } from "@/components/execution/ContextStrategyBadge";
 import { cn } from "@/lib/utils";
 import { Loader2, AlertCircle } from "lucide-react";
-import { api } from "@/lib/api";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { api, getApiBaseUrl } from "@/lib/api";
 
 // The actual page content wrapped in the provider context
 function ExecutionDashboard({ id }: { id: string }) {
@@ -32,18 +30,14 @@ function ExecutionDashboard({ id }: { id: string }) {
 
     async function loadAndSubscribe() {
       try {
-        const res = await fetch(`${API_BASE}/api/executions/${id}`);
-        if (!res.ok) {
-          throw new Error(`Failed to load execution details (${res.status})`);
-        }
-        const execData = await res.json();
+        const execData = await api.getExecution(id);
         if (!isMounted) return;
         dispatch({ type: "SET_EXECUTION", payload: execData });
         dispatch({ type: "SET_ACTIVE_PHASE", payload: "p1" });
         setLoading(false);
 
         // Connect to SSE for real-time agent updates
-        sse = new EventSource(`${API_BASE}/api/executions/${id}/stream`);
+        sse = new EventSource(`${getApiBaseUrl()}/api/executions/${id}/stream`);
         sse.addEventListener("update", (event: any) => {
           if (!isMounted) return;
           try {
@@ -98,9 +92,28 @@ function ExecutionDashboard({ id }: { id: string }) {
 
   if (!state.currentExecution) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-[var(--accent-danger)]">
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-80px)] text-[var(--accent-danger)] p-6">
         <AlertCircle size={48} className="mb-4" />
-        <p>Execution not found or failed to load.</p>
+        <p className="text-lg font-semibold">Execution not found or failed to load.</p>
+        {errorMessage && (
+          <div className="mt-4 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-sm text-red-400 max-w-md text-center break-words">
+            Error details: {errorMessage}
+          </div>
+        )}
+        <div className="mt-6 flex gap-4">
+          <button 
+            onClick={() => window.location.reload()} 
+            className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium transition-colors text-white"
+          >
+            Retry Loading
+          </button>
+          <a 
+            href="/" 
+            className="px-4 py-2 bg-[var(--accent-primary)] hover:opacity-90 rounded-lg text-sm font-medium transition-opacity text-white"
+          >
+            Return to Dashboard
+          </a>
+        </div>
       </div>
     );
   }
