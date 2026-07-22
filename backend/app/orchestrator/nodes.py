@@ -23,6 +23,8 @@ async def _emit(state: ChethasState, event_type: str, phase: str, agent: str, co
     if exec_id:
         try:
             await broadcast_event(exec_id, event_type, phase, agent, content, meta or {})
+            from app.api.routes.executions import update_execution_phase_status
+            update_execution_phase_status(exec_id, phase, event_type)
         except Exception as e:
             logger.warning(f"Failed to emit broadcast ({e})")
 

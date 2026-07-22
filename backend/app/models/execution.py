@@ -7,6 +7,7 @@ import uuid
 from .goal import Goal
 
 class ExecutionPhase(BaseModel):
+    id: str = "p1"
     name: str
     status: str = "pending" # pending/running/completed/failed
     started_at: Optional[datetime] = None

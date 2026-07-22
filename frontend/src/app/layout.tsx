@@ -1,10 +1,7 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import Link from "next/link";
 import { LayoutDashboard, FileText, History, BarChart3, Settings } from "lucide-react";
-
-const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Chethas | Autonomous Multi-Agent Intelligence",
@@ -18,7 +15,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className={`${inter.className} bg-primary text-slate-100 flex min-h-screen`}>
+      <body className="font-sans bg-primary text-slate-100 flex min-h-screen">
         {/* Sidebar */}
         <aside className="w-64 border-r border-white/10 glass-card flex flex-col fixed inset-y-0 left-0 z-50">
           <div className="p-6 h-20 flex items-center">

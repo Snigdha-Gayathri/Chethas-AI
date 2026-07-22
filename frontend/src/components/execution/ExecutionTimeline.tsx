@@ -11,10 +11,24 @@ interface ExecutionTimelineProps {
 }
 
 export function ExecutionTimeline({ phases, activePhaseId, onPhaseSelect }: ExecutionTimelineProps) {
+  const isOverviewActive = activePhaseId === "overview" || activePhaseId === null;
+
   return (
     <div className="relative p-6 bg-[var(--surface)] border border-white/5 rounded-2xl h-full flex flex-col gap-6 overflow-y-auto custom-scrollbar">
       <h3 className="text-lg font-semibold text-[var(--text-primary)] sticky top-0 bg-[var(--surface)] z-10 pb-2">Execution Flow</h3>
       
+      {/* Executive Overview Item */}
+      <div 
+        onClick={() => onPhaseSelect("overview")}
+        className={cn(
+          "p-4 rounded-xl cursor-pointer transition-all duration-200 border flex items-center justify-between backdrop-blur-sm",
+          isOverviewActive ? "bg-gradient-to-r from-[var(--accent-primary)]/20 to-transparent border-[var(--accent-primary)] text-white shadow-lg shadow-[var(--accent-primary)]/10 font-bold" : "bg-white/5 border-white/5 hover:bg-white/[0.07] text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-medium"
+        )}
+      >
+        <span className="text-sm">Executive Overview</span>
+        <span className="text-xs px-2 py-0.5 rounded bg-white/10 text-[var(--text-muted)]">Dashboard</span>
+      </div>
+
       <div className="relative flex flex-col gap-4">
         {phases.map((phase, index) => {
           const isActive = activePhaseId === phase.id;
